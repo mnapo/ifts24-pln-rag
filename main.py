@@ -53,42 +53,56 @@ async def chat(payload: ChatRequest) -> ChatResponse:
             status_code=422,
             detail="El último mensaje debe ser del usuario.",
         )
-    if not settings.openai_api_key:
+    if not settings.deepseek_api_key:
         raise HTTPException(
             status_code=503,
-            detail="El servicio de chat no está configurado: falta OPENAI_API_KEY.",
+            detail="El servicio de chat no está configurado: falta DEEPSEEK_API_KEY.",
         )
 
     try:
-        async with AsyncOpenAI(api_key=settings.openai_api_key) as client:
-            response = await client.responses.create(
-                model=settings.openai_model,
-                instructions=build_business_instructions(settings),
-                input=[message.model_dump() for message in messages],
+        async with AsyncOpenAI(
+            api_key=settings.deepseek_api_key,
+            base_url="https://api.deepseek.com",
+        ) as client:
+            response = await client.chat.completions.create(
+                model=settings.deepseek_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": build_business_instructions(settings),
+                    },
+                    *[message.model_dump() for message in messages],
+                ],
+                extra_body={"thinking": {"type": "disabled"}},
             )
-        answer = response.output_text.strip()
+
+        answer = (response.choices[0].message.content or "").strip()
         if not answer:
             raise HTTPException(
                 status_code=502,
-                detail="El modelo no devolvió una respuesta de texto.",
+                detail="DeepSeek no devolvió una respuesta de texto.",
             )
         return ChatResponse(message=answer)
     except HTTPException:
         raise
     except RateLimitError as exc:
+        logger.warning("DeepSeek rechazó la solicitud por límite de uso: %s", exc)
         raise HTTPException(
             status_code=429,
-            detail="Se alcanzó el límite de uso de OpenAI. Intenta nuevamente más tarde.",
+            detail="DeepSeek está limitando temporalmente las solicitudes. Intenta nuevamente más tarde.",
         ) from exc
     except APIConnectionError as exc:
-        logger.exception("No se pudo conectar con OpenAI.")
+        logger.exception("No se pudo conectar con DeepSeek.")
         raise HTTPException(
             status_code=502,
-            detail="No se pudo conectar con OpenAI.",
+            detail="No se pudo conectar con DeepSeek.",
         ) from exc
     except APIStatusError as exc:
-        logger.exception("OpenAI devolvió un error.")
-        raise HTTPException(
-            status_code=502,
-            detail="OpenAI devolvió un error al procesar el mensaje.",
-        ) from exc
+        logger.exception("DeepSeek devolvió un error HTTP %s.", exc.status_code)
+        if exc.status_code == 402:
+            detail = "La cuenta de DeepSeek no tiene saldo suficiente para procesar la solicitud."
+            status_code = 402
+        else:
+            detail = "DeepSeek devolvió un error al procesar el mensaje."
+            status_code = 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
