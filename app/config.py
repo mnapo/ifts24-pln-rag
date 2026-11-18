@@ -45,8 +45,10 @@ def _env_int(name: str, default: int, minimum: int) -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    deepseek_api_key: str
-    deepseek_model: str
+    ai_provider: str
+    ai_api_key: str
+    ai_model: str
+    ai_base_url: str
     business_name: str
     business_sector: str
     business_description: str
@@ -64,8 +66,10 @@ class Settings:
 def get_settings() -> Settings:
     """Carga la configuración con valores seguros; las credenciales se validan al usarlas."""
     return Settings(
-        deepseek_api_key=_env_text("DEEPSEEK_API_KEY"),
-        deepseek_model=_env_text("DEEPSEEK_MODEL", "deepseek-flash"),
+        ai_provider=_env_text("AI_PROVIDER", "gemini").lower(),
+        ai_api_key=_env_text("AI_API_KEY"),
+        ai_model=_env_text("AI_MODEL", "gemini-3.8-flash"),
+        ai_base_url=_env_text("AI_BASE_URL").rstrip("/"),
         business_name=_env_text("BUSINESS_NAME", "Mi negocio"),
         business_sector=_env_text("BUSINESS_SECTOR", "No especificado"),
         business_description=_env_text("BUSINESS_DESCRIPTION"),
