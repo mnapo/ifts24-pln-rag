@@ -75,11 +75,22 @@
   }
 
   function showError(message) {
-    const error = document.createElement("p");
-    error.className = "error-message";
-    error.textContent = message;
-    error.style.cssText = "margin:0 0 0 42px;color:#b54747;font-size:12px;line-height:1.5";
-    messagesElement.append(error);
+    const article = document.createElement("article");
+    article.className = "message error";
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = "!";
+    const body = document.createElement("div");
+    body.className = "message-content";
+    const label = document.createElement("div");
+    label.className = "message-label";
+    label.textContent = "Error";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = message;
+    body.append(label, bubble);
+    article.append(avatar, body);
+    messagesElement.append(article);
     conversation.scrollTop = conversation.scrollHeight;
   }
 
@@ -103,11 +114,15 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const detail = typeof data.detail === "string" ? data.detail : "No se pudo procesar el mensaje.";
+        const detail = typeof data.detail === "string"
+          ? data.detail
+          : Array.isArray(data.detail)
+            ? data.detail.map(item => item.msg || JSON.stringify(item)).join("\n")
+            : `Error HTTP ${response.status}: ${response.statusText || "No se pudo procesar el mensaje."}`;
         throw new Error(detail);
       }
       if (typeof data.message !== "string" || !data.message.trim()) {
-        throw new Error("El asistente devolvió una respuesta vacía.");
+        throw new Error("El servidor devolvió una respuesta vacía o con formato inválido.");
       }
       history = [...requestMessages, { role: "assistant", content: data.message }].slice(-30);
       persist();
@@ -115,7 +130,7 @@
       addMessage("assistant", data.message);
     } catch (error) {
       document.querySelector("#typing-indicator")?.remove();
-      showError(error instanceof Error ? error.message : "Ocurrió un error inesperado.");
+      showError(error instanceof Error ? error.message : String(error));
     } finally {
       sending = false;
       sendButton.disabled = false;
