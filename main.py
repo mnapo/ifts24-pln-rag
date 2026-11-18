@@ -1,6 +1,9 @@
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI, RateLimitError
 
 from app.config import get_settings
@@ -8,6 +11,7 @@ from app.core.prompt_builder import build_business_instructions
 from app.models.chat import ChatRequest, ChatResponse
 
 logger = logging.getLogger(__name__)
+STATIC_DIR = Path(__file__).parent / "app" / "static"
 
 app = FastAPI(
     title="PLN RAG",
@@ -16,13 +20,12 @@ app = FastAPI(
 )
 
 
-@app.get("/", tags=["estado"])
-async def home() -> dict[str, str]:
-    return {
-        "nombre": "PLN RAG",
-        "estado": "activo",
-        "documentacion": "/docs",
-    }
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def home() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health", tags=["estado"])
