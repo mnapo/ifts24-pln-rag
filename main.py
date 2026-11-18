@@ -71,7 +71,12 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     base_url = settings.ai_base_url or PROVIDER_BASE_URLS[provider]
 
     try:
-        async with AsyncOpenAI(api_key=settings.ai_api_key, base_url=base_url) as client:
+        async with AsyncOpenAI(
+            api_key=settings.ai_api_key,
+            base_url=base_url,
+            timeout=20.0,
+            max_retries=0,
+        ) as client:
             response = await client.chat.completions.create(
                 model=settings.ai_model,
                 messages=[
