@@ -13,12 +13,19 @@ from app.models.chat import ChatRequest, ChatResponse
 logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "app" / "static"
 
+PROVIDER_BASE_URLS = {
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "deepseek": "https://api.deepseek.com",
+    "groq": "https://api.groq.com/openai/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "openai": "https://api.openai.com/v1",
+}
+
 app = FastAPI(
     title="PLN RAG",
     description="Asistente conversacional configurable para un negocio.",
     version="0.1.0",
 )
-
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -37,6 +44,7 @@ async def health() -> dict[str, str]:
 async def chat(payload: ChatRequest) -> ChatResponse:
     settings = get_settings()
     messages = payload.messages
+    provider = settings.ai_provider
 
     if len(messages) > settings.max_history_messages:
         raise HTTPException(
@@ -53,19 +61,26 @@ async def chat(payload: ChatRequest) -> ChatResponse:
             status_code=422,
             detail="El último mensaje debe ser del usuario.",
         )
-    if not settings.deepseek_api_key:
+    if provider not in PROVIDER_BASE_URLS and not settings.ai_base_url:
         raise HTTPException(
             status_code=503,
-            detail="El servicio de chat no está configurado: falta DEEPSEEK_API_KEY.",
+            detail="El proveedor configurado no es compatible. Define AI_BASE_URL o elige un proveedor admitido.",
         )
+    if not settings.ai_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="El servicio de chat no está configurado: falta AI_API_KEY.",
+        )
+
+    base_url = settings.ai_base_url or PROVIDER_BASE_URLS[provider]
 
     try:
         async with AsyncOpenAI(
-            api_key=settings.deepseek_api_key,
-            base_url="https://api.deepseek.com",
+            api_key=settings.ai_api_key,
+            base_url=base_url,
         ) as client:
             response = await client.chat.completions.create(
-                model=settings.deepseek_model,
+                model=settings.ai_model,
                 messages=[
                     {
                         "role": "system",
@@ -73,36 +88,35 @@ async def chat(payload: ChatRequest) -> ChatResponse:
                     },
                     *[message.model_dump() for message in messages],
                 ],
-                extra_body={"thinking": {"type": "disabled"}},
             )
 
         answer = (response.choices[0].message.content or "").strip()
         if not answer:
             raise HTTPException(
                 status_code=502,
-                detail="DeepSeek no devolvió una respuesta de texto.",
+                detail=f"{provider.capitalize()} no devolvió una respuesta de texto.",
             )
         return ChatResponse(message=answer)
     except HTTPException:
         raise
     except RateLimitError as exc:
-        logger.warning("DeepSeek rechazó la solicitud por límite de uso: %s", exc)
+        logger.warning("%s rechazó la solicitud por límite de uso: %s", provider, exc)
         raise HTTPException(
             status_code=429,
-            detail="DeepSeek está limitando temporalmente las solicitudes. Intenta nuevamente más tarde.",
+            detail=f"{provider.capitalize()} está limitando temporalmente las solicitudes. Intenta nuevamente más tarde.",
         ) from exc
     except APIConnectionError as exc:
-        logger.exception("No se pudo conectar con DeepSeek.")
+        logger.exception("No se pudo conectar con %s.", provider)
         raise HTTPException(
             status_code=502,
-            detail="No se pudo conectar con DeepSeek.",
+            detail=f"No se pudo conectar con {provider}.",
         ) from exc
     except APIStatusError as exc:
-        logger.exception("DeepSeek devolvió un error HTTP %s.", exc.status_code)
+        logger.exception("%s devolvió un error HTTP %s.", provider, exc.status_code)
         if exc.status_code == 402:
-            detail = "La cuenta de DeepSeek no tiene saldo suficiente para procesar la solicitud."
+            detail = f"La cuenta de {provider} no tiene saldo suficiente para procesar la solicitud."
             status_code = 402
         else:
-            detail = "DeepSeek devolvió un error al procesar el mensaje."
+            detail = f"{provider.capitalize()} devolvió un error al procesar el mensaje."
             status_code = 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
