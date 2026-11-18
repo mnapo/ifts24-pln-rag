@@ -45,8 +45,8 @@ def _env_int(name: str, default: int, minimum: int) -> int:
 
 @dataclass(frozen=True)
 class Settings:
-    openai_api_key: str
-    openai_model: str
+    deepseek_api_key: str
+    deepseek_model: str
     business_name: str
     business_sector: str
     business_description: str
@@ -64,8 +64,8 @@ class Settings:
 def get_settings() -> Settings:
     """Carga la configuración con valores seguros; las credenciales se validan al usarlas."""
     return Settings(
-        openai_api_key=_env_text("OPENAI_API_KEY"),
-        openai_model=_env_text("OPENAI_MODEL", "gpt-4.1-mini"),
+        deepseek_api_key=_env_text("DEEPSEEK_API_KEY"),
+        deepseek_model=_env_text("DEEPSEEK_MODEL", "deepseek-flash"),
         business_name=_env_text("BUSINESS_NAME", "Mi negocio"),
         business_sector=_env_text("BUSINESS_SECTOR", "No especificado"),
         business_description=_env_text("BUSINESS_DESCRIPTION"),
