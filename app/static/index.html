@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f8fa">
+  <meta name="description" content="Asistente virtual">
+  <title>Asistente | PLN RAG</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <script src="/static/js/chat.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Inicio">
+        <span class="brand-mark">✳</span>
+        <span><strong>PLN RAG</strong><small>Asistente virtual</small></span>
+      </a>
+      <button class="new-chat" id="new-chat" type="button"><span>＋</span> Nueva conversación</button>
+      <div class="sidebar-spacer"></div>
+      <div class="privacy-note">
+        <span class="privacy-icon">◈</span>
+        <div><strong>Conversación privada</strong><p>El historial se conserva solo en esta sesión del navegador.</p></div>
+      </div>
+      <div class="sidebar-footer">Desarrollado con IA</div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">✳</span><strong>PLN RAG</strong></div>
+        <div class="connection-status"><span class="status-dot"></span><span>Asistente disponible</span></div>
+      </header>
+
+      <section class="conversation" id="conversation" aria-live="polite" aria-label="Conversación">
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon">✳</div>
+          <p class="eyebrow">ASISTENTE VIRTUAL</p>
+          <h1>¿En qué puedo<br><span>ayudarte hoy?</span></h1>
+          <p class="welcome-copy">Estoy aquí para responder tus consultas y ayudarte a encontrar lo que necesitas.</p>
+          <div class="suggestions" aria-label="Sugerencias">
+            <button class="suggestion" type="button" data-prompt="¿Qué productos o servicios ofrecen?"><span>◫</span><span><strong>Productos y servicios</strong><small>Conoce nuestra propuesta</small></span><b>↗</b></button>
+            <button class="suggestion" type="button" data-prompt="¿Cuáles son sus horarios de atención?"><span>◷</span><span><strong>Horarios de atención</strong><small>Consulta cuándo estamos disponibles</small></span><b>↗</b></button>
+            <button class="suggestion" type="button" data-prompt="¿Cómo puedo ponerme en contacto?"><span>⌁</span><span><strong>Contacto y consultas</strong><small>Encuentra nuestros canales de atención</small></span><b>↗</b></button>
+          </div>
+        </div>
+        <div class="messages" id="messages"></div>
+      </section>
+
+      <footer class="composer-area">
+        <form class="composer" id="chat-form">
+          <label class="sr-only" for="message-input">Escribe tu mensaje</label>
+          <textarea id="message-input" rows="1" maxlength="4000" placeholder="Escribe tu mensaje..." autocomplete="off" required></textarea>
+          <button class="send-button" id="send-button" type="submit" aria-label="Enviar mensaje"><span>↑</span></button>
+        </form>
+        <p class="disclaimer">La IA puede cometer errores. Verifica la información importante.</p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
