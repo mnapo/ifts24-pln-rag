@@ -13,7 +13,7 @@ Asistente conversacional configurable para un negocio, desarrollado con Python, 
 2. Completar `OPENAI_API_KEY`.
 3. Ajustar las variables `BUSINESS_*` según la información disponible del negocio.
 4. Instalar dependencias: `pip install -r requirements.txt`.
-5. Ejecutar: `uvicorn app.main:app --reload`.
+5. Ejecutar: `uvicorn main:app --reload`.
 
 ## Variables de entorno
 
@@ -29,3 +29,10 @@ Los valores numéricos inválidos se registran en el log y no impiden el inicio 
 ## Conversaciones
 
 La aplicación no persiste conversaciones. El historial se mantiene temporalmente en el navegador y se envía con cada solicitud.
+
+
+## Interfaz web
+
+La aplicación incluye una ventana de chat adaptable a dispositivos móviles, servida desde FastAPI en la ruta raíz. Inicia el servidor y abre `http://localhost:8000`.
+
+El historial se conserva en `sessionStorage` durante la sesión del navegador y se envía junto con cada mensaje. No se almacena en el servidor ni en una base de datos.
