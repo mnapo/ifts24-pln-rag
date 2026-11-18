@@ -30,6 +30,14 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _safe_error_detail(value: object, api_key: str) -> str:
+    """Evita devolver credenciales si el proveedor las incluye accidentalmente en un error."""
+    detail = str(value).strip() or "Sin descripción adicional."
+    if api_key:
+        detail = detail.replace(api_key, "[credencial ocultada]")
+    return detail[:1200]
+
+
 @app.get("/", include_in_schema=False)
 async def home() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
@@ -47,45 +55,27 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     provider = settings.ai_provider
 
     if len(messages) > settings.max_history_messages:
-        raise HTTPException(
-            status_code=422,
-            detail="El historial supera el límite permitido.",
-        )
+        raise HTTPException(status_code=422, detail="El historial supera el límite permitido.")
     if any(len(message.content) > settings.max_message_length for message in messages):
-        raise HTTPException(
-            status_code=422,
-            detail="Uno de los mensajes supera el límite permitido.",
-        )
+        raise HTTPException(status_code=422, detail="Uno de los mensajes supera el límite permitido.")
     if messages[-1].role != "user":
-        raise HTTPException(
-            status_code=422,
-            detail="El último mensaje debe ser del usuario.",
-        )
+        raise HTTPException(status_code=422, detail="El último mensaje debe ser del usuario.")
     if provider not in PROVIDER_BASE_URLS and not settings.ai_base_url:
         raise HTTPException(
             status_code=503,
-            detail="El proveedor configurado no es compatible. Define AI_BASE_URL o elige un proveedor admitido.",
+            detail="Proveedor no compatible. Configura AI_BASE_URL o elige un proveedor admitido.",
         )
     if not settings.ai_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="El servicio de chat no está configurado: falta AI_API_KEY.",
-        )
+        raise HTTPException(status_code=503, detail="Falta configurar AI_API_KEY.")
 
     base_url = settings.ai_base_url or PROVIDER_BASE_URLS[provider]
 
     try:
-        async with AsyncOpenAI(
-            api_key=settings.ai_api_key,
-            base_url=base_url,
-        ) as client:
+        async with AsyncOpenAI(api_key=settings.ai_api_key, base_url=base_url) as client:
             response = await client.chat.completions.create(
                 model=settings.ai_model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": build_business_instructions(settings),
-                    },
+                    {"role": "system", "content": build_business_instructions(settings)},
                     *[message.model_dump() for message in messages],
                 ],
             )
@@ -94,29 +84,42 @@ async def chat(payload: ChatRequest) -> ChatResponse:
         if not answer:
             raise HTTPException(
                 status_code=502,
-                detail=f"{provider.capitalize()} no devolvió una respuesta de texto.",
+                detail=f"{provider}: el modelo devolvió una respuesta vacía.",
             )
         return ChatResponse(message=answer)
     except HTTPException:
         raise
     except RateLimitError as exc:
-        logger.warning("%s rechazó la solicitud por límite de uso: %s", provider, exc)
+        logger.exception("%s respondió con límite de uso.", provider)
         raise HTTPException(
             status_code=429,
-            detail=f"{provider.capitalize()} está limitando temporalmente las solicitudes. Intenta nuevamente más tarde.",
+            detail=f"Error de {provider} (HTTP 429): {_safe_error_detail(exc, settings.ai_api_key)}",
         ) from exc
     except APIConnectionError as exc:
-        logger.exception("No se pudo conectar con %s.", provider)
+        logger.exception("Error de conexión con %s.", provider)
         raise HTTPException(
             status_code=502,
-            detail=f"No se pudo conectar con {provider}.",
+            detail=f"Error de conexión con {provider}: {_safe_error_detail(exc, settings.ai_api_key)}",
         ) from exc
     except APIStatusError as exc:
-        logger.exception("%s devolvió un error HTTP %s.", provider, exc.status_code)
-        if exc.status_code == 402:
-            detail = f"La cuenta de {provider} no tiene saldo suficiente para procesar la solicitud."
-            status_code = 402
+        logger.exception("%s devolvió HTTP %s.", provider, exc.status_code)
+        body = exc.body if isinstance(exc.body, dict) else {}
+        provider_error = body.get("error", body)
+        if isinstance(provider_error, dict):
+            code = provider_error.get("code") or provider_error.get("type")
+            message = provider_error.get("message") or str(exc)
+            diagnostic = f"{message}" + (f" (código: {code})" if code else "")
         else:
-            detail = f"{provider.capitalize()} devolvió un error al procesar el mensaje."
-            status_code = 502
-        raise HTTPException(status_code=status_code, detail=detail) from exc
+            diagnostic = str(exc)
+        request_id = exc.response.headers.get("x-request-id")
+        suffix = f" | ID: {request_id}" if request_id else ""
+        raise HTTPException(
+            status_code=exc.status_code if 400 <= exc.status_code < 600 else 502,
+            detail=f"Error de {provider} (HTTP {exc.status_code}): {_safe_error_detail(diagnostic, settings.ai_api_key)}{suffix}",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Error interno al procesar una solicitud de chat.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno ({type(exc).__name__}): {_safe_error_detail(exc, settings.ai_api_key)}",
+        ) from exc
