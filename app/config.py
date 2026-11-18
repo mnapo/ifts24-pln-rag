@@ -1,10 +1,46 @@
+import logging
+import os
 from dataclasses import dataclass
 from functools import lru_cache
-import os
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+def _env_text(name: str, default: str = "") -> str:
+    """Lee una variable de entorno y aplica un valor predeterminado si falta o está vacía."""
+    return os.getenv(name, default).strip() or default
+
+
+def _env_int(name: str, default: int, minimum: int) -> int:
+    """Convierte una variable numérica sin interrumpir el inicio ante valores inválidos."""
+    raw_value = os.getenv(name, "").strip()
+    if not raw_value:
+        return default
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.warning(
+            "La variable %s debe ser un entero; se utilizará el valor predeterminado (%s).",
+            name,
+            default,
+        )
+        return default
+
+    if value < minimum:
+        logger.warning(
+            "La variable %s debe ser mayor o igual a %s; se utilizará el valor predeterminado (%s).",
+            name,
+            minimum,
+            default,
+        )
+        return default
+
+    return value
 
 
 @dataclass(frozen=True)
@@ -26,18 +62,19 @@ class Settings:
 
 @lru_cache
 def get_settings() -> Settings:
+    """Carga la configuración con valores seguros; las credenciales se validan al usarlas."""
     return Settings(
-        openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip(),
-        business_name=os.getenv("BUSINESS_NAME", "Mi negocio").strip(),
-        business_sector=os.getenv("BUSINESS_SECTOR", "").strip(),
-        business_description=os.getenv("BUSINESS_DESCRIPTION", "").strip(),
-        business_products=os.getenv("BUSINESS_PRODUCTS", "").strip(),
-        business_tone=os.getenv("BUSINESS_TONE", "Claro, cordial y profesional").strip(),
-        business_policies=os.getenv("BUSINESS_POLICIES", "").strip(),
-        business_hours=os.getenv("BUSINESS_HOURS", "").strip(),
-        business_contact=os.getenv("BUSINESS_CONTACT", "").strip(),
-        business_instructions=os.getenv("BUSINESS_INSTRUCTIONS", "").strip(),
-        max_history_messages=max(2, int(os.getenv("MAX_HISTORY_MESSAGES", "30"))),
-        max_message_length=max(100, int(os.getenv("MAX_MESSAGE_LENGTH", "4000"))),
+        openai_api_key=_env_text("OPENAI_API_KEY"),
+        openai_model=_env_text("OPENAI_MODEL", "gpt-4.1-mini"),
+        business_name=_env_text("BUSINESS_NAME", "Mi negocio"),
+        business_sector=_env_text("BUSINESS_SECTOR", "No especificado"),
+        business_description=_env_text("BUSINESS_DESCRIPTION"),
+        business_products=_env_text("BUSINESS_PRODUCTS"),
+        business_tone=_env_text("BUSINESS_TONE", "Claro, cordial y profesional"),
+        business_policies=_env_text("BUSINESS_POLICIES"),
+        business_hours=_env_text("BUSINESS_HOURS"),
+        business_contact=_env_text("BUSINESS_CONTACT"),
+        business_instructions=_env_text("BUSINESS_INSTRUCTIONS"),
+        max_history_messages=_env_int("MAX_HISTORY_MESSAGES", 30, 2),
+        max_message_length=_env_int("MAX_MESSAGE_LENGTH", 4000, 100),
     )
