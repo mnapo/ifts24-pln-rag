@@ -107,18 +107,40 @@
     showTyping();
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: requestMessages })
-      });
-      const data = await response.json().catch(() => ({}));
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      let response;
+      let responseText = "";
+      try {
+        response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: requestMessages }),
+          signal: controller.signal
+        });
+        responseText = await response.text();
+      } catch (error) {
+        if (error && error.name === "AbortError") {
+          throw new Error("La solicitud superó el tiempo de espera. Inténtalo nuevamente.");
+        }
+        throw new Error(`No se pudo conectar con el servidor: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      let data = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = {};
+      }
       if (!response.ok) {
         const detail = typeof data.detail === "string"
           ? data.detail
           : Array.isArray(data.detail)
             ? data.detail.map(item => item.msg || JSON.stringify(item)).join("\n")
-            : `Error HTTP ${response.status}: ${response.statusText || "No se pudo procesar el mensaje."}`;
+            : responseText.trim().slice(0, 1200) ||
+              `Error HTTP ${response.status}: ${response.statusText || "El servidor no pudo procesar el mensaje."}`;
         throw new Error(detail);
       }
       if (typeof data.message !== "string" || !data.message.trim()) {
